@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findTable } from "@/lib/adminConfig";
@@ -45,6 +45,7 @@ export async function createRow(table: string, formData: FormData) {
   const { error } = await sb.from(cfg.table).insert(row);
   if (error) back(table, "บันทึกไม่สำเร็จ: " + error.message, true);
   revalidatePath("/", "layout");
+  revalidateTag("content");
   back(table, "บันทึกแล้ว");
 }
 
@@ -55,6 +56,7 @@ export async function deleteRow(table: string, id: string) {
   const { error } = await sb.from(cfg.table).delete().eq("id", id);
   if (error) back(table, "ลบไม่สำเร็จ: " + error.message, true);
   revalidatePath("/", "layout");
+  revalidateTag("content");
   back(table, "ลบแล้ว");
 }
 
@@ -68,5 +70,6 @@ export async function saveSettings(formData: FormData) {
   const { error } = await sb.from("settings").upsert(rows);
   if (error) redirect("/admin/settings?err=" + encodeURIComponent(error.message));
   revalidatePath("/", "layout");
+  revalidateTag("content");
   redirect("/admin/settings?msg=" + encodeURIComponent("บันทึกแล้ว"));
 }
