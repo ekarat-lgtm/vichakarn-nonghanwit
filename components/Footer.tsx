@@ -9,7 +9,7 @@ export default async function Footer() {
         <div>
           <h3>{school.nameTh}</h3>
           <p>{school.address}</p>
-          <p className="meta" style={{ color: "#9fb0d6" }}>{school.affiliation}</p>
+          <p className="meta">{school.affiliation}</p>
         </div>
         <div>
           <h3>ติดต่อ{school.deptName}</h3>
