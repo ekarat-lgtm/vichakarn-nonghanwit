@@ -1,0 +1,33 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSession, isEditor } from "@/lib/data";
+import { adminTables } from "@/lib/adminConfig";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { email, role } = await getSession();
+  if (!email) redirect("/login");
+  if (!isEditor(role)) {
+    return (
+      <div className="container section">
+        <div className="alert err">
+          บัญชี {email} ยังไม่มีสิทธิ์จัดการเว็บ (สิทธิ์ปัจจุบัน: {role}) — ให้แอดมินตั้ง role เป็น editor หรือ admin ในตาราง profiles
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="page-head"><div className="container"><h1>⚙️ จัดการเว็บไซต์งานวิชาการ</h1><p>เข้าสู่ระบบเป็น {email} ({role})</p></div></div>
+      <div className="container section">
+        <div className="admin-tabs">
+          <Link href="/admin">ภาพรวม</Link>
+          {adminTables.map((t) => <Link key={t.table} href={`/admin/${t.table}`}>{t.icon} {t.label}</Link>)}
+          <Link href="/admin/settings">🛠️ ข้อมูลฝ่ายวิชาการ</Link>
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
