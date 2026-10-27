@@ -2,74 +2,128 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { findTable } from "@/lib/adminConfig";
+import { findTable, type TableCfg } from "@/lib/adminConfig";
 import { settingDefs } from "@/lib/school";
 import { getSession, isEditor } from "@/lib/data";
+import { dbDelete, dbInsert, dbSelect, dbUpdate, dbUpsert, type Row } from "@/lib/db";
+import { uploadFile } from "@/lib/upload";
 
-async function guard() {
+async function guard(adminOnly = false) {
   const { role } = await getSession();
-  if (!isEditor(role)) redirect("/login");
-  const sb = await createClient();
-  if (!sb) redirect("/admin?msg=" + encodeURIComponent("ยังไม่ได้ตั้งค่า Supabase"));
-  return sb;
+  if (!isEditor(role) || (adminOnly && role !== "admin")) redirect("/login");
 }
 
-const back = (table: string, msg: string, err = false) =>
-  redirect(`/admin/${table}?${err ? "err" : "msg"}=${encodeURIComponent(msg)}`);
+const back = (to: string, msg: string, err = false): never =>
+  redirect(`${to}${to.includes("?") ? "&" : "?"}${err ? "err" : "msg"}=${encodeURIComponent(msg)}`);
+
+const refresh = () => {
+  revalidatePath("/", "layout");
+  revalidateTag("content");
+};
+
+async function buildRow(cfg: TableCfg, fd: FormData, editing: boolean, to: string): Promise<Row> {
+  const row: Row = {};
+  for (const f of cfg.fields) {
+    if (f.type === "file") {
+      const file = fd.get(f.name);
+      if (file instanceof File && file.size > 0 && f.uploadTo) {
+        const up = await uploadFile(file, cfg.table);
+        if (up.error) back(to, "อัปโหลดไฟล์ไม่สำเร็จ: " + up.error, true);
+        row[f.uploadTo] = up.url;
+      }
+      continue;
+    }
+    const v = String(fd.get(f.name) ?? "").trim();
+    if (f.required && !v) back(to, `กรุณากรอก “${f.label}”`, true);
+    if (f.type === "bool") { row[f.name] = v !== "false"; continue; }
+    if (v === "") {
+      if (editing && f.type !== "number" && !f.required) row[f.name] = null; // ล้างค่าที่ผู้ใช้ลบออก
+      continue; // สร้างใหม่: ปล่อยให้ใช้ค่า default ของฐานข้อมูล
+    }
+    row[f.name] = f.type === "number" ? Number(v) : v;
+  }
+  return row;
+}
 
 export async function createRow(table: string, formData: FormData) {
   const cfg = findTable(table);
   if (!cfg) redirect("/admin");
-  const sb = await guard();
+  await guard(cfg.adminOnly);
+  const to = `/admin/${table}`;
+  const row = await buildRow(cfg, formData, false, to);
+  if (cfg.table === "documents" && !row.file_url) back(to, "ต้องใส่ลิงก์ไฟล์หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่ง", true);
+  const { error } = await dbInsert(cfg.table, row);
+  if (error) back(to, "บันทึกไม่สำเร็จ: " + error, true);
+  refresh();
+  back(to, "บันทึกแล้ว");
+}
 
-  const row: Record<string, unknown> = {};
-  for (const f of cfg.fields) {
-    if (f.type === "file") continue;
-    const v = String(formData.get(f.name) ?? "").trim();
-    if (f.required && !v) back(table, `กรุณากรอก “${f.label}”`, true);
-    if (v === "") continue; // ปล่อยให้ใช้ค่า default ของฐานข้อมูล
-    row[f.name] = f.type === "number" ? Number(v) : v;
-  }
-
-  const file = formData.get("file");
-  if (cfg.table === "documents" && file instanceof File && file.size > 0) {
-    const safe = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `${new Date().getFullYear()}/${Date.now()}-${safe}`;
-    const { error } = await sb.storage.from("academic-docs").upload(path, file, { contentType: file.type });
-    if (error) back(table, "อัปโหลดไฟล์ไม่สำเร็จ: " + error.message, true);
-    row.file_url = sb.storage.from("academic-docs").getPublicUrl(path).data.publicUrl;
-  }
-  if (cfg.table === "documents" && !row.file_url) back(table, "ต้องใส่ลิงก์ไฟล์หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่ง", true);
-
-  const { error } = await sb.from(cfg.table).insert(row);
-  if (error) back(table, "บันทึกไม่สำเร็จ: " + error.message, true);
-  revalidatePath("/", "layout");
-  revalidateTag("content");
-  back(table, "บันทึกแล้ว");
+export async function updateRow(table: string, id: string, formData: FormData) {
+  const cfg = findTable(table);
+  if (!cfg) redirect("/admin");
+  await guard(cfg.adminOnly);
+  const to = `/admin/${table}/${id}`;
+  const row = await buildRow(cfg, formData, true, to);
+  if (cfg.table === "documents") row.updated_at = new Date().toISOString().slice(0, 10);
+  const { error } = await dbUpdate(cfg.table, id, row);
+  if (error) back(to, "แก้ไขไม่สำเร็จ: " + error, true);
+  refresh();
+  back(`/admin/${table}`, "แก้ไขแล้ว");
 }
 
 export async function deleteRow(table: string, id: string) {
   const cfg = findTable(table);
   if (!cfg) redirect("/admin");
-  const sb = await guard();
-  const { error } = await sb.from(cfg.table).delete().eq("id", id);
-  if (error) back(table, "ลบไม่สำเร็จ: " + error.message, true);
-  revalidatePath("/", "layout");
-  revalidateTag("content");
-  back(table, "ลบแล้ว");
+  await guard(cfg.adminOnly);
+  const { error } = await dbDelete(cfg.table, id);
+  if (error) back(`/admin/${table}`, "ลบไม่สำเร็จ: " + error, true);
+  refresh();
+  back(`/admin/${table}`, "ลบแล้ว");
+}
+
+export async function togglePublished(table: string, id: string) {
+  await guard();
+  const [row] = await dbSelect(table, { eq: { id }, limit: 1 });
+  if (!row) back(`/admin/${table}`, "ไม่พบรายการ", true);
+  const next = !row.published;
+  const { error } = await dbUpdate(table, id, { published: next });
+  if (error) back(`/admin/${table}`, error, true);
+  refresh();
+  back(`/admin/${table}`, next ? "เผยแพร่แล้ว" : "ซ่อนเป็นฉบับร่างแล้ว");
 }
 
 export async function saveSettings(formData: FormData) {
-  const sb = await guard();
+  await guard();
   const rows = settingDefs.map((d) => ({
     key: d.key,
     value: String(formData.get(d.key) ?? "").trim(),
     updated_at: new Date().toISOString(),
   }));
-  const { error } = await sb.from("settings").upsert(rows);
-  if (error) redirect("/admin/settings?err=" + encodeURIComponent(error.message));
-  revalidatePath("/", "layout");
-  revalidateTag("content");
+  const { error } = await dbUpsert("settings", rows, "key");
+  if (error) redirect("/admin/settings?err=" + encodeURIComponent(error));
+  refresh();
   redirect("/admin/settings?msg=" + encodeURIComponent("บันทึกแล้ว"));
+}
+
+/* ---------- ข้อ 4: จัดการผู้ใช้ ---------- */
+export async function updateUserRole(id: string, formData: FormData) {
+  await guard(true);
+  const role = String(formData.get("role") ?? "");
+  if (!["guest", "teacher", "editor", "admin"].includes(role)) back("/admin/users", "สิทธิ์ไม่ถูกต้อง", true);
+  const me = await getSession();
+  if (me.uid === id && role !== "admin") back("/admin/users", "ไม่สามารถลดสิทธิ์ของตัวเองได้", true);
+  const { error } = await dbUpdate("profiles", id, { role });
+  if (error) back("/admin/users", error, true);
+  refresh();
+  back("/admin/users", "เปลี่ยนสิทธิ์แล้ว");
+}
+
+/* ---------- ข้อ 5: ตอบคำร้อง ---------- */
+export async function updateRequest(id: string, formData: FormData) {
+  await guard();
+  const status = String(formData.get("status") ?? "รอดำเนินการ");
+  const response = String(formData.get("response") ?? "").trim();
+  const { error } = await dbUpdate("requests", id, { status, response: response || null, updated_at: new Date().toISOString() });
+  if (error) back("/admin/requests", error, true);
+  back("/admin/requests", "บันทึกการตอบกลับแล้ว");
 }

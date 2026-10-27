@@ -23,7 +23,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="container section">
         <div className="admin-tabs">
           <Link href="/admin">ภาพรวม</Link>
-          {adminTables.map((t) => <Link key={t.table} href={`/admin/${t.table}`}>{t.icon} {t.label}</Link>)}
+          {adminTables.filter((t) => !t.adminOnly || role === "admin").map((t) => <Link key={t.table} href={`/admin/${t.table}`}>{t.icon} {t.label}</Link>)}
+          <Link href="/admin/requests">📨 คำร้อง</Link>
+          <Link href="/admin/tracking">📊 ติดตามการส่งงาน</Link>
+          {role === "admin" && <Link href="/admin/users">👥 ผู้ใช้/สิทธิ์</Link>}
           <Link href="/admin/settings">🛠️ ข้อมูลฝ่ายวิชาการ</Link>
         </div>
         {children}
