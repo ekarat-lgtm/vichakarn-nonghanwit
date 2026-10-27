@@ -40,6 +40,21 @@ export default async function Home() {
 
       <section className="section">
         <div className="container">
+          <div className="section-title"><h2>🆕 บริการออนไลน์ของฝ่ายวิชาการ</h2></div>
+          <div className="grid cols-4" style={{ marginBottom: 40 }}>
+            {[
+              ["📨", "ยื่นคำร้องออนไลน์", "แก้ผลการเรียน ขอ ปพ.1 ติดตามสถานะ", "/requests"],
+              ["🗓️", "ตารางสอน", "ดูตามห้องเรียนหรือครูผู้สอน", "/timetable"],
+              ["🏫", "ประกาศห้องเรียน/ผลสอบ", "ประกาศรายห้อง รายชื่อ ตารางสอบ", "/classes"],
+              ["🔎", "ตรวจผลสอบรายบุคคล", "รหัสนักเรียน + PIN", "/results"],
+            ].map(([icon, title, desc, href]) => (
+              <Link key={href} href={href} className="card link">
+                <div className="icon">{icon}</div>
+                <h3 style={{ margin: "6px 0 2px" }}>{title}</h3>
+                <p className="meta" style={{ margin: 0 }}>{desc}</p>
+              </Link>
+            ))}
+          </div>
           <div className="section-title"><h2>⚡ ทางลัดบริการ</h2></div>
           <div className="grid cols-4">
             {quick.length ? quick.map((x) => (

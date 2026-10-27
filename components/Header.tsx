@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { school } from "@/lib/school";
-import { getSession, isEditor } from "@/lib/data";
+import { getSession, isEditor, isStaff } from "@/lib/data";
 import { logout } from "@/app/login/actions";
+import { hasSupabase } from "@/lib/supabase/server";
 
 const nav = [
   { href: "/news", label: "ข่าวประชาสัมพันธ์" },
@@ -10,6 +11,9 @@ const nav = [
   { href: "/teaching", label: "การเรียนการสอน" },
   { href: "/quality", label: "นิเทศ/ประกันคุณภาพ" },
   { href: "/documents", label: "คลังเอกสาร" },
+  { href: "/requests", label: "คำร้อง" },
+  { href: "/timetable", label: "ตารางสอน" },
+  { href: "/classes", label: "ประกาศ/ผลสอบ" },
   { href: "/achievements", label: "ผลงาน" },
   { href: "/calendar", label: "ปฏิทิน" },
   { href: "/services", label: "บริการออนไลน์" },
@@ -43,8 +47,9 @@ export default async function Header() {
             {nav.map((n) => (
               <Link key={n.href} href={n.href}>{n.label}</Link>
             ))}
+            {isStaff(role) && <Link href="/tracking">✅ ติดตามงาน</Link>}
             {isEditor(role) && <Link href="/admin">⚙️ จัดการเว็บ</Link>}
-            {email ? (
+            {!hasSupabase ? null : email ? (
               <form action={logout} style={{ display: "inline" }}>
                 <button className="btn small brand" title={email}>ออกจากระบบ</button>
               </form>
