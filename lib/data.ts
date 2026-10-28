@@ -29,7 +29,7 @@ export type Achievement = {
 export type Role = "anon" | "guest" | "teacher" | "editor" | "admin";
 export type Slot = { id: string; class_name: string; day: number; period: number; subject: string; teacher_name: string | null; room: string | null };
 export type Notice = { id: string; class_name: string; title: string; body: string | null; kind: string; link_url: string | null; created_at: string };
-export type Session = { email: string | null; role: Role; name: string | null; uid: string | null };
+export type Session = { email: string | null; role: Role; name: string | null; uid: string | null; idHint?: string | null };
 
 export const fmtDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -51,8 +51,10 @@ export const getSession = cache(async (): Promise<Session> => {
   if (!sb) return { email: null, role: "anon", name: null, uid: null };
   const { data } = await sb.auth.getUser();
   if (!data.user) return { email: null, role: "anon", name: null, uid: null };
-  const { data: p } = await sb.from("profiles").select("role,full_name").eq("id", data.user.id).maybeSingle();
-  return { email: data.user.email ?? null, role: (p?.role as Role) ?? "guest", name: p?.full_name ?? data.user.email ?? null, uid: data.user.id };
+  // id_hint (4 หลักท้ายเลขบัตร) มาจาก schema_v3.sql — ถ้ายังไม่ได้รัน ให้ถอยไปอ่านเฉพาะคอลัมน์เดิม
+  let { data: p, error: pe } = await sb.from("profiles").select("role,full_name,id_hint").eq("id", data.user.id).maybeSingle();
+  if (pe) ({ data: p } = await sb.from("profiles").select("role,full_name").eq("id", data.user.id).maybeSingle());
+  return { email: data.user.email ?? null, role: (p?.role as Role) ?? "guest", name: p?.full_name ?? data.user.email ?? null, uid: data.user.id, idHint: (p as { id_hint?: string | null } | null)?.id_hint ?? null };
 });
 
 export const isStaff = (r: Role) => r === "teacher" || r === "editor" || r === "admin";

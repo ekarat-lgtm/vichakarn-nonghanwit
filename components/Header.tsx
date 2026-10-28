@@ -3,6 +3,7 @@ import { school } from "@/lib/school";
 import { getSession, isEditor, isStaff } from "@/lib/data";
 import { logout } from "@/app/login/actions";
 import { hasSupabase } from "@/lib/supabase/server";
+import { REQUEST_TYPES } from "@/lib/requests";
 
 const nav = [
   { href: "/news", label: "ข่าวประชาสัมพันธ์" },
@@ -44,18 +45,33 @@ export default async function Header() {
           <input type="checkbox" id="menu-check" />
           <label htmlFor="menu-check" className="menu-toggle">☰ เมนู</label>
           <nav className="nav">
-            {nav.map((n) => (
+            {nav.map((n) => n.href === "/requests" ? (
+              <div className="nav-dd" key={n.href}>
+                <Link href="/requests" className="nav-dd-trigger">{n.label} <span aria-hidden>▾</span></Link>
+                <div className="nav-dd-menu">
+                  <div className="nav-dd-title">ยื่นคำร้อง</div>
+                  {REQUEST_TYPES.map((t) => <Link key={t} href={`/requests?type=${encodeURIComponent(t)}#form`} className="nav-dd-type">{t}</Link>)}
+                  <hr />
+                  <Link href="/requests#track">🔍 ติดตามสถานะคำร้อง</Link>
+                  {isEditor(role) && (
+                    <>
+                      <hr />
+                      <div className="nav-dd-title">สำหรับเจ้าหน้าที่</div>
+                      <Link href="/admin/requests">⚙️ จัดการคำร้อง</Link>
+                      <Link href="/admin/requests?view=log">🕘 ประวัติการแก้ไขคำร้อง</Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
               <Link key={n.href} href={n.href}>{n.label}</Link>
             ))}
             {isStaff(role) && <Link href="/tracking">✅ ติดตามงาน</Link>}
             {isEditor(role) && <Link href="/admin">⚙️ จัดการเว็บ</Link>}
             {!hasSupabase ? null : email ? (
-              <>
-              <Link href="/account/password">🔑 เปลี่ยนรหัสผ่าน</Link>
               <form action={logout} style={{ display: "inline" }}>
                 <button className="btn small brand" title={name ?? email}>ออกจากระบบ</button>
               </form>
-              </>
             ) : (
               <Link href="/login" className="login">เข้าสู่ระบบครู</Link>
             )}

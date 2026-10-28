@@ -5,8 +5,8 @@ import { submitRequest } from "./actions";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "คำร้องออนไลน์" };
 
-export default async function Requests({ searchParams }: { searchParams: Promise<{ code?: string; done?: string; err?: string }> }) {
-  const { code, done, err } = await searchParams;
+export default async function Requests({ searchParams }: { searchParams: Promise<{ code?: string; done?: string; err?: string; type?: string }> }) {
+  const { code, done, err, type } = await searchParams;
   const tracked = code ? await trackRequest(code) : null;
   const stIdx = tracked ? REQUEST_STATUSES.indexOf(tracked.status) : -1;
   return (
@@ -20,11 +20,11 @@ export default async function Requests({ searchParams }: { searchParams: Promise
         )}
         {err && <div className="alert err">{err}</div>}
         <div className="grid cols-2" style={{ alignItems: "start" }}>
-          <div className="card">
+          <div className="card" id="form">
             <h2>ยื่นคำร้องใหม่</h2>
             <form action={submitRequest} className="stack">
               <label>ประเภทคำร้อง *
-                <select name="type" required>{REQUEST_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
+                <select name="type" required defaultValue={type && REQUEST_TYPES.includes(type) ? type : undefined}>{REQUEST_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
               </label>
               <label>ชื่อ-สกุล ผู้ยื่นคำร้อง *<input name="requester_name" required maxLength={120} /></label>
               <label>ชั้น/ห้อง (ถ้ามี)<input name="class_name" placeholder="เช่น ม.6/2" maxLength={40} /></label>
@@ -36,7 +36,7 @@ export default async function Requests({ searchParams }: { searchParams: Promise
             </form>
           </div>
 
-          <div className="card">
+          <div className="card" id="track">
             <h2>🔍 ติดตามสถานะ</h2>
             <form className="filters" style={{ padding: 0, border: 0, boxShadow: "none", background: "transparent" }}>
               <input name="code" defaultValue={code ?? ""} placeholder="รหัสคำร้อง เช่น RQ-69-XXXXXX" style={{ flex: 1, minWidth: 200 }} />
