@@ -25,7 +25,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin">ภาพรวม</Link>
           {adminTables.filter((t) => !t.adminOnly || role === "admin").map((t) => <Link key={t.table} href={`/admin/${t.table}`}>{t.icon} {t.label}</Link>)}
           <Link href="/admin/requests">📨 คำร้อง</Link>
+          <Link href="/admin/submissions">📥 งานที่ครูแจ้งส่ง</Link>
           <Link href="/admin/tracking">📊 ติดตามการส่งงาน</Link>
+          {role === "admin" && <Link href="/admin/drive">📁 โฟลเดอร์ส่งงาน (Drive)</Link>}
           {role === "admin" && <Link href="/admin/users">👥 ผู้ใช้/สิทธิ์</Link>}
           <Link href="/admin/settings">🛠️ ข้อมูลฝ่ายวิชาการ</Link>
         </div>
