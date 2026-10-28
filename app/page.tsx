@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { school } from "@/lib/school";
 import { sections } from "@/lib/sections";
-import { getNews, getDocs, getEvents, getServices, getSession, getSettings, isStaff, fmtDate } from "@/lib/data";
+import { getNews, getDocs, getEvents, getServices, getSession, getSettings, isStaff } from "@/lib/data";
+import { todayTH } from "@/lib/store";
+import MiniCalendar from "@/components/MiniCalendar";
 import NewsList from "@/components/NewsList";
 import DocTable from "@/components/DocTable";
 
@@ -11,7 +13,7 @@ export default async function Home() {
   const [news, docs, events, services, { role }, s] = await Promise.all([
     getNews(5),
     getDocs({ limit: 6 }),
-    getEvents(true, 5),
+    getEvents(false, 500),
     getServices(),
     getSession(),
     getSettings(),
@@ -77,12 +79,10 @@ export default async function Home() {
           <div>
             <div className="section-title"><h2>📅 กำหนดการ</h2><Link href="/calendar">ปฏิทิน →</Link></div>
             <div className="card">
-              {events.length ? events.map((e) => (
-                <div key={e.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-                  <b>{e.title}</b>
-                  <div className="meta">{fmtDate(e.start_date)}{e.end_date ? ` – ${fmtDate(e.end_date)}` : ""} · {e.category}</div>
-                </div>
-              )) : <p className="meta">ยังไม่มีกำหนดการที่จะมาถึง</p>}
+              <MiniCalendar
+                today={todayTH()}
+                events={events.map((e) => ({ id: e.id, title: e.title, category: e.category, start_date: e.start_date, end_date: e.end_date, description: e.description }))}
+              />
             </div>
           </div>
         </div>
