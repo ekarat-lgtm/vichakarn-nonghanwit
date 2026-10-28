@@ -75,7 +75,7 @@ export default async function Home() {
             <NewsList items={news} />
           </div>
           <div>
-            <div className="section-title"><h2>📅 ปฏิทินวิชาการ</h2></div>
+            <div className="section-title"><Link href="/calendar"><h2>📅 ปฏิทินวิชาการ</h2></Link></div>
             <div className="card">
               {events.length ? events.map((e) => (
                 <div key={e.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
