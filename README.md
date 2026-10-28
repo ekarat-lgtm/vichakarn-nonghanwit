@@ -105,3 +105,10 @@ npm run dev                  # http://localhost:3000
 - bucket `academic-docs` เป็น public (ใครมีลิงก์เปิดได้) เอกสารที่อ่อนไหวควรใช้ลิงก์ Google Drive ที่จำกัดสิทธิ์เฉพาะ @nonghanwit.ac.th
 - ภาพบนเว็บโหลดตรงจากเซิร์ฟเวอร์ภาพของโรงเรียน (thai.ac) หากลิงก์เสียให้อัปโหลดภาพของฝ่ายเอง แล้วแก้ใน `lib/school.ts`
 - หน้าแอดมินรองรับ “เพิ่ม” และ “ลบ” (ยังไม่มีปุ่มแก้ไขรายการเดิม — ลบแล้วเพิ่มใหม่ หรือแก้ใน Supabase Table Editor)
+
+## ส่งงานครูผ่าน Google Drive + แบบแจ้งส่ง (v5)
+- ครูกรอกแบบแจ้งส่งที่ `/submit` (งานที่ส่ง · กลุ่มสาระฯ · รายวิชา · ระดับชั้น · ห้อง · ภาคเรียน · หมายเหตุ) แล้วแนบไฟล์ — **ไฟล์ไปที่ Google Drive โดยตรง** ฐานข้อมูลเก็บเฉพาะข้อความแจ้งส่งและลิงก์ไฟล์ (ตาราง `work_submissions`)
+- แอดมินตั้งโฟลเดอร์ปลายทางที่ `/admin/drive` · ดูรายการ/ใครยังไม่ส่งที่ `/admin/submissions`
+- ติดตั้ง: (1) รัน `supabase/schema_v5.sql` (2) ตั้งค่า Service Account ตามด้านล่าง
+- **ตั้งค่าอัปโหลดอัตโนมัติ:** Google Cloud Console → สร้างโปรเจกต์ → เปิด *Google Drive API* → IAM → Service Accounts → สร้างบัญชี → Keys → Add key (JSON) → ใส่ `client_email` ใน `GOOGLE_SERVICE_ACCOUNT_EMAIL` และ `private_key` ใน `GOOGLE_SERVICE_ACCOUNT_KEY` (Vercel → Environment Variables แล้ว Redeploy) → แชร์โฟลเดอร์ส่งงานให้อีเมลของ Service Account เป็น **ผู้แก้ไข** — ควรใช้ **Shared Drive** ของโรงเรียน เพราะไฟล์ที่อัปโหลดจะเป็นของ Service Account (โควตาเดี่ยวของบัญชีนั้น)
+- ถ้ายังไม่ตั้งค่า Service Account ฟอร์มจะทำงานโหมดสำรอง: ครูอัปโหลดไฟล์ใน Drive เอง แล้วกรอกชื่อไฟล์ในแบบแจ้งส่ง

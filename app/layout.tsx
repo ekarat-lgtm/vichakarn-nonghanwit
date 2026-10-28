@@ -3,7 +3,6 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import DemoBar from "@/components/DemoBar";
-import AccountBar from "@/components/AccountBar";
 import { school } from "@/lib/school";
 
 export const metadata: Metadata = {
@@ -28,7 +27,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         <main>{children}</main>
         <Footer />
-        <AccountBar />
       </body>
     </html>
   );
