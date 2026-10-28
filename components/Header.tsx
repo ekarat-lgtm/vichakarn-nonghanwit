@@ -20,7 +20,7 @@ const nav = [
 ];
 
 export default async function Header() {
-  const { email, role } = await getSession();
+  const { email, role, name } = await getSession();
   return (
     <>
       <div className="topbar">
@@ -50,9 +50,12 @@ export default async function Header() {
             {isStaff(role) && <Link href="/tracking">✅ ติดตามงาน</Link>}
             {isEditor(role) && <Link href="/admin">⚙️ จัดการเว็บ</Link>}
             {!hasSupabase ? null : email ? (
+              <>
+              <Link href="/account/password">🔑 เปลี่ยนรหัสผ่าน</Link>
               <form action={logout} style={{ display: "inline" }}>
-                <button className="btn small brand" title={email}>ออกจากระบบ</button>
+                <button className="btn small brand" title={name ?? email}>ออกจากระบบ</button>
               </form>
+              </>
             ) : (
               <Link href="/login" className="login">เข้าสู่ระบบครู</Link>
             )}
