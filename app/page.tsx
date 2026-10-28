@@ -77,7 +77,7 @@ export default async function Home() {
             <NewsList items={news} />
           </div>
           <div>
-            <div className="section-title"><h2>📅 กำหนดการ</h2><Link href="/calendar">ปฏิทิน →</Link></div>
+            <div className="section-title"><h2>📅 กำหนดการ</h2></div>
             <div className="card">
               <MiniCalendar
                 today={todayTH()}
