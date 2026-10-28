@@ -7,6 +7,7 @@ import { settingDefs } from "@/lib/school";
 import { getSession, isEditor } from "@/lib/data";
 import { dbDelete, dbInsert, dbSelect, dbUpdate, dbUpsert, type Row } from "@/lib/db";
 import { uploadFile } from "@/lib/upload";
+import { createStaff, resetStaffPassword } from "@/lib/staff";
 
 async function guard(adminOnly = false) {
   const { role } = await getSession();
@@ -116,6 +117,45 @@ export async function updateUserRole(id: string, formData: FormData) {
   if (error) back("/admin/users", error, true);
   refresh();
   back("/admin/users", "เปลี่ยนสิทธิ์แล้ว");
+}
+
+/* ---------- บัญชีครูด้วยเลขบัตรประชาชน (รหัสเริ่มต้น = วันเกิด) ---------- */
+export async function createTeacher(formData: FormData) {
+  await guard(true);
+  const err = await createStaff({
+    nid: String(formData.get("nid") ?? ""),
+    name: String(formData.get("name") ?? ""),
+    birth: String(formData.get("birth") ?? ""),
+    role: String(formData.get("role") ?? "teacher"),
+  });
+  if (err) back("/admin/users", err, true);
+  refresh();
+  back("/admin/users", "เพิ่มบัญชีแล้ว — ครูเข้าสู่ระบบด้วยเลขบัตร + วันเกิด และต้องเปลี่ยนรหัสผ่านครั้งแรก");
+}
+
+/** นำเข้าหลายคน: 1 บรรทัดต่อ 1 คน  เลขบัตร, ชื่อ-สกุล, วันเกิด[, สิทธิ์]  (คั่นด้วยจุลภาคหรือแท็บ — วางจาก Excel ได้) */
+export async function importTeachers(formData: FormData) {
+  await guard(true);
+  const lines = String(formData.get("rows") ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) back("/admin/users", "ยังไม่ได้วางรายชื่อ", true);
+  if (lines.length > 200) back("/admin/users", "นำเข้าได้ครั้งละไม่เกิน 200 รายการ", true);
+  let ok = 0;
+  const fails: string[] = [];
+  for (const [i, line] of lines.entries()) {
+    const [nid = "", name = "", birth = "", role = "teacher"] = line.split(/[\t,]/).map((x) => x.trim());
+    const err = await createStaff({ nid, name, birth, role: role || "teacher" });
+    if (err) fails.push(`บรรทัด ${i + 1}: ${err}`); else ok++;
+  }
+  refresh();
+  const msg = `นำเข้าสำเร็จ ${ok} รายการ` + (fails.length ? ` · ไม่สำเร็จ ${fails.length}: ` + fails.slice(0, 8).join(" | ") + (fails.length > 8 ? " …" : "") : "");
+  back("/admin/users", msg, fails.length > 0 && ok === 0);
+}
+
+export async function resetStaffPasswordAction(id: string, formData: FormData) {
+  await guard(true);
+  const err = await resetStaffPassword(id, String(formData.get("birth") ?? ""));
+  if (err) back("/admin/users", err, true);
+  back("/admin/users", "รีเซ็ตรหัสผ่านเป็นวันเกิดแล้ว — ครูต้องเปลี่ยนรหัสใหม่เมื่อเข้าสู่ระบบ");
 }
 
 /* ---------- ข้อ 5: ตอบคำร้อง ---------- */
