@@ -8,6 +8,7 @@ import { getSession, isEditor } from "@/lib/data";
 import { dbDelete, dbInsert, dbSelect, dbUpdate, dbUpsert, type Row } from "@/lib/db";
 import { uploadFile } from "@/lib/upload";
 import { createStaff, resetStaffPassword } from "@/lib/staff";
+import { REQUEST_STATUSES } from "@/lib/requests";
 
 async function guard(adminOnly = false) {
   const { role } = await getSession();
@@ -162,8 +163,23 @@ export async function resetStaffPasswordAction(id: string, formData: FormData) {
 export async function updateRequest(id: string, formData: FormData) {
   await guard();
   const status = String(formData.get("status") ?? "รอดำเนินการ");
-  const response = String(formData.get("response") ?? "").trim();
-  const { error } = await dbUpdate("requests", id, { status, response: response || null, updated_at: new Date().toISOString() });
+  if (!REQUEST_STATUSES.includes(status)) back("/admin/requests", "สถานะไม่ถูกต้อง", true);
+  const response = String(formData.get("response") ?? "").trim() || null;
+  const [before] = await dbSelect("requests", { eq: { id }, limit: 1 });
+  if (!before) back("/admin/requests", "ไม่พบคำร้อง", true);
+  if (before.status === status && (before.response ?? null) === response) back("/admin/requests", "ไม่มีการเปลี่ยนแปลง");
+
+  const { error } = await dbUpdate("requests", id, { status, response, updated_at: new Date().toISOString() });
   if (error) back("/admin/requests", error, true);
+
+  // บันทึกประวัติ: ใครแก้ เมื่อไร เปลี่ยนอะไร (ฐานข้อมูลประทับชื่อ/เวลาให้อีกชั้นด้วยทริกเกอร์ใน schema_v4.sql)
+  const me = await getSession();
+  const { error: logErr } = await dbInsert("request_logs", {
+    request_id: id, request_code: before.code,
+    editor_id: me.uid, editor_name: me.name ?? me.email ?? "ไม่ทราบ", editor_role: me.role,
+    from_status: before.status, to_status: status,
+    from_response: before.response ?? null, to_response: response,
+  });
+  if (logErr) back("/admin/requests", "บันทึกการตอบกลับแล้ว แต่บันทึกประวัติไม่สำเร็จ (รัน supabase/schema_v4.sql แล้วหรือยัง?)", true);
   back("/admin/requests", "บันทึกการตอบกลับแล้ว");
 }
