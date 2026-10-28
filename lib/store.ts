@@ -23,17 +23,22 @@ const SUBJECTS: [string, string][] = [
   ["ชีววิทยา", "ครูมาลี สุขสันต์"], ["พลศึกษา", "ครูประเสริฐ บุญมี"], ["ศิลปะ", "ครูรัตนา คำดี"],
 ];
 export const CLASSES = ["ม.1/1", "ม.2/16", "ม.6/2"];
+const AREA_OF: Record<string, string> = {
+  "คณิตศาสตร์": "คณิตศาสตร์", "เคมี": "วิทยาศาสตร์และเทคโนโลยี", "ภาษาไทย": "ภาษาไทย", "ภาษาอังกฤษ": "ภาษาต่างประเทศ",
+  "ฟิสิกส์": "วิทยาศาสตร์และเทคโนโลยี", "สังคมศึกษา": "สังคมศึกษา ศาสนา และวัฒนธรรม", "ชีววิทยา": "วิทยาศาสตร์และเทคโนโลยี",
+  "พลศึกษา": "สุขศึกษาและพลศึกษา", "ศิลปะ": "ศิลปะ",
+};
 
 function seed(): Record<string, Row[]> {
   const now = new Date().toISOString();
   const withId = (rows: Row[]) => rows.map((r) => ({ id: newId(), created_at: now, ...r }));
 
   const profiles: Row[] = [
-    { id: "u-a1", email: DEMO_USERS.admin.email, full_name: DEMO_USERS.admin.name, role: "admin" },
+    { id: "u-a1", email: DEMO_USERS.admin.email, full_name: DEMO_USERS.admin.name, role: "admin", learning_area: "อื่น ๆ" },
     { id: "u-e1", email: DEMO_USERS.editor.email, full_name: DEMO_USERS.editor.name, role: "editor" },
-    { id: "u-t1", email: DEMO_USERS.teacher.email, full_name: DEMO_USERS.teacher.name, role: "teacher" },
-    ...SUBJECTS.filter(([, t]) => !t.startsWith("ครูบุ๊ค")).map(([, t], i) => ({
-      id: `u-t${i + 2}`, email: `teacher${i + 2}@nonghanwit.ac.th`, full_name: t, role: "teacher",
+    { id: "u-t1", email: DEMO_USERS.teacher.email, full_name: DEMO_USERS.teacher.name, role: "teacher", learning_area: "วิทยาศาสตร์และเทคโนโลยี" },
+    ...SUBJECTS.filter(([, t]) => !t.startsWith("ครูบุ๊ค")).map(([s, t], i) => ({
+      id: `u-t${i + 2}`, email: `teacher${i + 2}@nonghanwit.ac.th`, full_name: t, role: "teacher", learning_area: AREA_OF[s] ?? null,
     })),
     { id: "u-g1", email: "academic.dept@gmail.com", full_name: "บัญชีกลางฝ่ายวิชาการ", role: "guest" },
   ].map((r) => ({ created_at: now, ...r }));
@@ -59,8 +64,16 @@ function seed(): Record<string, Row[]> {
     ...teachers.slice(0, 3).map((t) => ({ task_id: tasks[0].id, teacher_id: t.id, teacher_name: t.full_name })),
   ].map((r) => ({ id: newId(), submitted_at: now, ...r }));
 
+  const byName = (n: string) => profiles.find((p) => p.full_name === n)?.id;
+  const P1 = "ขอเอกสาร ปพ.1 / ใบรับรองผลการเรียน";
+  const request_assignees = withId([
+    { request_type: P1, level: "*", teacher_id: byName("ครูสมชาย ใจดี") },
+    { request_type: P1, level: "ม.1", teacher_id: byName("ครูสุดา แสงทอง") },
+  ]);
+
   return {
     profiles,
+    request_assignees,
     settings: [],
     news: withId([
       { title: "ประกาศกำหนดการสอบกลางภาค ภาคเรียนที่ 2", category: NEWS_CATEGORIES[1] ?? NEWS_CATEGORIES[0], body: "กำหนดสอบกลางภาคเรียนที่ 2 ปีการศึกษา 2569 ตามตารางสอบที่แนบ นักเรียนตรวจสอบห้องสอบและเวลาให้เรียบร้อย", published: true, published_at: todayTH(-2) },

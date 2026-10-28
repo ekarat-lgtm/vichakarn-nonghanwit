@@ -1,5 +1,6 @@
 import { fmtDate } from "@/lib/data";
 import { REQUEST_STATUSES, REQUEST_TYPES, trackRequest } from "@/lib/requests";
+import { LEVELS } from "@/lib/submissions";
 import { submitRequest } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,9 @@ export default async function Requests({ searchParams }: { searchParams: Promise
                 <select name="type" required defaultValue={type && REQUEST_TYPES.includes(type) ? type : undefined}>{REQUEST_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
               </label>
               <label>ชื่อ-สกุล ผู้ยื่นคำร้อง *<input name="requester_name" required maxLength={120} /></label>
+              <label>ระดับชั้น
+                <select name="level" defaultValue=""><option value="">— ไม่ระบุ —</option>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select>
+              </label>
               <label>ชั้น/ห้อง (ถ้ามี)<input name="class_name" placeholder="เช่น ม.6/2" maxLength={40} /></label>
               <label>เบอร์โทร / LINE ID สำหรับติดต่อกลับ *<input name="contact" required maxLength={80} /></label>
               <label>รายละเอียด<textarea name="detail" maxLength={1500} placeholder="ระบุรายวิชา/เอกสารที่ต้องการ และเหตุผล" /></label>

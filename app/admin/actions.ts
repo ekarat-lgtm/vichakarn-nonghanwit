@@ -8,7 +8,10 @@ import { getSession, isEditor } from "@/lib/data";
 import { dbDelete, dbInsert, dbSelect, dbUpdate, dbUpsert, type Row } from "@/lib/db";
 import { uploadFile } from "@/lib/upload";
 import { createStaff, resetStaffPassword } from "@/lib/staff";
-import { REQUEST_STATUSES } from "@/lib/requests";
+import { ANY_LEVEL, REQUEST_STATUSES, REQUEST_TYPES } from "@/lib/requests";
+import { LEARNING_AREAS, LEVELS } from "@/lib/submissions";
+import { isEmail, matchArea } from "@/lib/teachers";
+import { assignAndNotify } from "@/lib/assign";
 
 async function guard(adminOnly = false) {
   const { role } = await getSession();
@@ -128,13 +131,15 @@ export async function createTeacher(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     birth: String(formData.get("birth") ?? ""),
     role: String(formData.get("role") ?? "teacher"),
+    area: String(formData.get("area") ?? ""),
+    email: String(formData.get("email") ?? ""),
   });
   if (err) back("/admin/users", err, true);
   refresh();
   back("/admin/users", "เพิ่มบัญชีแล้ว — ครูเข้าสู่ระบบด้วยเลขบัตร + วันเกิด และต้องเปลี่ยนรหัสผ่านครั้งแรก");
 }
 
-/** นำเข้าหลายคน: 1 บรรทัดต่อ 1 คน  เลขบัตร, ชื่อ-สกุล, วันเกิด[, สิทธิ์]  (คั่นด้วยจุลภาคหรือแท็บ — วางจาก Excel ได้) */
+/** นำเข้าหลายคน: 1 บรรทัดต่อ 1 คน  เลขบัตร, ชื่อ-สกุล, วันเกิด, สิทธิ์(เว้นว่าง=teacher), กลุ่มสาระ, [อีเมล]  (คั่นด้วยจุลภาคหรือแท็บ — วางจาก Excel ได้) */
 export async function importTeachers(formData: FormData) {
   await guard(true);
   const lines = String(formData.get("rows") ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -143,8 +148,10 @@ export async function importTeachers(formData: FormData) {
   let ok = 0;
   const fails: string[] = [];
   for (const [i, line] of lines.entries()) {
-    const [nid = "", name = "", birth = "", role = "teacher"] = line.split(/[\t,]/).map((x) => x.trim());
-    const err = await createStaff({ nid, name, birth, role: role || "teacher" });
+    const [nid = "", name = "", birth = "", role = "", area = "", email = ""] = line.split(/[\t,]/).map((x) => x.trim());
+    const matched = matchArea(area);
+    const err = matched ? await createStaff({ nid, name, birth, role: role || "teacher", area: matched, email })
+      : `กลุ่มสาระ “${area || "(ว่าง)"}” ไม่ตรงกับรายการ (คอลัมน์ที่ 5)`;
     if (err) fails.push(`บรรทัด ${i + 1}: ${err}`); else ok++;
   }
   refresh();
@@ -157,6 +164,19 @@ export async function resetStaffPasswordAction(id: string, formData: FormData) {
   const err = await resetStaffPassword(id, String(formData.get("birth") ?? ""));
   if (err) back("/admin/users", err, true);
   back("/admin/users", "รีเซ็ตรหัสผ่านเป็นวันเกิดแล้ว — ครูต้องเปลี่ยนรหัสใหม่เมื่อเข้าสู่ระบบ");
+}
+
+/** แก้กลุ่มสาระ/อีเมลของผู้ใช้ที่มีอยู่แล้ว (เว้นว่างได้ = ล้างค่า) */
+export async function updateUserInfo(id: string, formData: FormData) {
+  await guard(true);
+  const area = String(formData.get("area") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (area && !LEARNING_AREAS.includes(area)) back("/admin/users", "กลุ่มสาระไม่ถูกต้อง", true);
+  if (email && !isEmail(email)) back("/admin/users", "รูปแบบอีเมลไม่ถูกต้อง", true);
+  const { error } = await dbUpdate("profiles", id, { learning_area: area || null, contact_email: email || null });
+  if (error) back("/admin/users", "บันทึกไม่สำเร็จ (รัน supabase/schema_v6.sql แล้วหรือยัง?): " + error, true);
+  refresh();
+  back("/admin/users", "บันทึกกลุ่มสาระ/อีเมลแล้ว");
 }
 
 /* ---------- ข้อ 5: ตอบคำร้อง ---------- */
@@ -182,4 +202,49 @@ export async function updateRequest(id: string, formData: FormData) {
   });
   if (logErr) back("/admin/requests", "บันทึกการตอบกลับแล้ว แต่บันทึกประวัติไม่สำเร็จ (รัน supabase/schema_v4.sql แล้วหรือยัง?)", true);
   back("/admin/requests", "บันทึกการตอบกลับแล้ว");
+}
+
+/* ---------- มอบหมายผู้รับผิดชอบคำร้อง (admin เท่านั้น) ---------- */
+const A = "/admin/requests?view=assign";
+
+async function staffExists(id: string) {
+  const [p] = await dbSelect("profiles", { eq: { id }, limit: 1 });
+  return !!p && p.role !== "guest";
+}
+
+/** กำหนดครูผู้รับผิดชอบให้ “ประเภทคำร้อง × หลายระดับชั้น” พร้อมกัน (ทับกติกาเดิมของระดับนั้น) */
+export async function saveAssignments(formData: FormData) {
+  await guard(true);
+  const type = String(formData.get("type") ?? "");
+  const teacher = String(formData.get("teacher") ?? "");
+  const levels = formData.getAll("levels").map(String);
+  if (!REQUEST_TYPES.includes(type)) back(A, "ประเภทคำร้องไม่ถูกต้อง", true);
+  if (!levels.length || levels.some((l) => l !== ANY_LEVEL && !LEVELS.includes(l))) back(A, "กรุณาเลือกระดับชั้นอย่างน้อย 1 ระดับ", true);
+  if (!(await staffExists(teacher))) back(A, "กรุณาเลือกครูผู้รับผิดชอบ", true);
+  for (const level of levels) {
+    const [old] = await dbSelect("request_assignees", { eq: { request_type: type, level }, limit: 1 });
+    const r = old ? await dbUpdate("request_assignees", old.id, { teacher_id: teacher }) : await dbInsert("request_assignees", { request_type: type, level, teacher_id: teacher });
+    if (r.error) back(A, "บันทึกไม่สำเร็จ (รัน supabase/schema_v6.sql แล้วหรือยัง?): " + r.error, true);
+  }
+  refresh();
+  back(A, `บันทึกผู้รับผิดชอบแล้ว (${levels.length} ระดับ) — มีผลกับคำร้องที่ยื่นหลังจากนี้`);
+}
+
+export async function deleteAssignment(id: string) {
+  await guard(true);
+  const { error } = await dbDelete("request_assignees", id);
+  if (error) back(A, "ลบไม่สำเร็จ: " + error, true);
+  back(A, "ลบกติกาแล้ว");
+}
+
+/** มอบหมาย/เปลี่ยนผู้รับผิดชอบ “คำร้องรายการนี้” แล้วส่งอีเมลแจ้ง (ใช้กับคำร้องเก่า หรือส่งซ้ำเมื่อครั้งแรกล้มเหลว) */
+export async function assignRequest(id: string, formData: FormData) {
+  await guard(true);
+  const teacher = String(formData.get("teacher") ?? "");
+  if (!(await staffExists(teacher))) back("/admin/requests", "กรุณาเลือกครูผู้รับผิดชอบ", true);
+  const [r] = await dbSelect("requests", { eq: { id }, limit: 1 });
+  if (!r) back("/admin/requests", "ไม่พบคำร้อง", true);
+  const res = await assignAndNotify(r.code, { teacherId: teacher });
+  revalidatePath("/admin/requests");
+  back("/admin/requests", `${r.code}: ${res.message}`, !res.ok);
 }

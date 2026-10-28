@@ -39,3 +39,10 @@ export async function trackRequest(code: string): Promise<TrackedRequest | null>
   const { data } = await sb.rpc("track_request", { p_code: c });
   return ((data as TrackedRequest[] | null) ?? [])[0] ?? null;
 }
+
+export const ANY_LEVEL = "*"; // ใช้ในกติกามอบหมาย: ครอบคลุมทุกระดับชั้น
+/** ดึงระดับชั้น (ม.1–ม.6) จากข้อความชั้น/ห้องที่ผู้ยื่นพิมพ์เอง เช่น "ม.6/2" "ม 3 ห้อง 4" "มัธยมศึกษาปีที่ 2" */
+export function levelOf(s?: string | null): string | null {
+  const m = (s ?? "").match(/ม\s*\.?\s*([1-6])(?!\d)/) ?? (s ?? "").match(/มัธยม(?:ศึกษา)?(?:\s*ปีที่)?\s*([1-6])(?!\d)/);
+  return m ? `ม.${m[1]}` : null;
+}
